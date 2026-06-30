@@ -1,0 +1,13 @@
+app:
+  name: Falcon Edge
+  version: 1.0.0
+
+edge:
+  name: falcon-edge-tvm
+
+core:
+  host: 127.0.0.1
+  grpc_port: 12167
+
+logging:
+  level: info

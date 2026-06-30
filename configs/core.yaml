@@ -1,0 +1,14 @@
+app:
+  name: Falcon Core
+  version: 1.0.0
+
+server:
+  http_port: 12166
+  grpc_port: 12167
+
+logging:
+  level: info
+
+storage:
+  data_dir: /var/lib/falcon
+  log_dir: /var/log/falcon

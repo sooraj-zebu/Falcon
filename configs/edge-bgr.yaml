@@ -1,0 +1,13 @@
+app:
+  name: Falcon Edge
+  version: 1.0.0
+
+edge:
+  name: falcon-edge-bgr
+
+core:
+  host: <CORE_IP_ADDRESS>
+  grpc_port: 12167
+
+logging:
+  level: info

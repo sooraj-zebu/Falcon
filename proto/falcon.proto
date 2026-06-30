@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package falcon;
+
+option go_package = "github.com/sooraj-zebu/falcon/proto;proto";
+
+// ---------- SERVICE ----------
+service FalconService {
+  rpc RegisterEdge (RegisterRequest) returns (RegisterResponse);
+}
+
+// ---------- EDGE REGISTRATION ----------
+message RegisterRequest {
+  string name = 1;
+  string version = 2;
+  string ip = 3;
+}
+
+message RegisterResponse {
+  string edge_id = 1;
+  string status = 2;
+}
