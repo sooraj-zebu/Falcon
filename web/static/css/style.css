@@ -1,0 +1,36 @@
+body{
+    font-family:Arial,sans-serif;
+    background:#f4f4f4;
+    margin:40px;
+}
+
+.container{
+    background:white;
+    padding:30px;
+    border-radius:8px;
+}
+
+table{
+    width:100%;
+    border-collapse:collapse;
+}
+
+th,td{
+    border:1px solid #ddd;
+    padding:10px;
+}
+
+th{
+    background:#333;
+    color:white;
+}
+
+.online{
+    color:green;
+    font-weight:bold;
+}
+
+.offline{
+    color:red;
+    font-weight:bold;
+}

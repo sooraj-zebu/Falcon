@@ -19,16 +19,20 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	FalconService_RegisterEdge_FullMethodName = "/falcon.FalconService/RegisterEdge"
+	FalconService_RegisterEdge_FullMethodName    = "/falcon.FalconService/RegisterEdge"
+	FalconService_Heartbeat_FullMethodName       = "/falcon.FalconService/Heartbeat"
+	FalconService_ReportStorage_FullMethodName   = "/falcon.FalconService/ReportStorage"
+	FalconService_UploadInventory_FullMethodName = "/falcon.FalconService/UploadInventory"
 )
 
 // FalconServiceClient is the client API for FalconService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
-//
-// ---------- SERVICE ----------
 type FalconServiceClient interface {
 	RegisterEdge(ctx context.Context, in *RegisterRequest, opts ...grpc.CallOption) (*RegisterResponse, error)
+	Heartbeat(ctx context.Context, in *HeartbeatRequest, opts ...grpc.CallOption) (*HeartbeatResponse, error)
+	ReportStorage(ctx context.Context, in *StorageReport, opts ...grpc.CallOption) (*StorageResponse, error)
+	UploadInventory(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[FileRecord, InventoryStatus], error)
 }
 
 type falconServiceClient struct {
@@ -49,13 +53,47 @@ func (c *falconServiceClient) RegisterEdge(ctx context.Context, in *RegisterRequ
 	return out, nil
 }
 
+func (c *falconServiceClient) Heartbeat(ctx context.Context, in *HeartbeatRequest, opts ...grpc.CallOption) (*HeartbeatResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(HeartbeatResponse)
+	err := c.cc.Invoke(ctx, FalconService_Heartbeat_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *falconServiceClient) ReportStorage(ctx context.Context, in *StorageReport, opts ...grpc.CallOption) (*StorageResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(StorageResponse)
+	err := c.cc.Invoke(ctx, FalconService_ReportStorage_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *falconServiceClient) UploadInventory(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[FileRecord, InventoryStatus], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &FalconService_ServiceDesc.Streams[0], FalconService_UploadInventory_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[FileRecord, InventoryStatus]{ClientStream: stream}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type FalconService_UploadInventoryClient = grpc.ClientStreamingClient[FileRecord, InventoryStatus]
+
 // FalconServiceServer is the server API for FalconService service.
 // All implementations must embed UnimplementedFalconServiceServer
 // for forward compatibility.
-//
-// ---------- SERVICE ----------
 type FalconServiceServer interface {
 	RegisterEdge(context.Context, *RegisterRequest) (*RegisterResponse, error)
+	Heartbeat(context.Context, *HeartbeatRequest) (*HeartbeatResponse, error)
+	ReportStorage(context.Context, *StorageReport) (*StorageResponse, error)
+	UploadInventory(grpc.ClientStreamingServer[FileRecord, InventoryStatus]) error
 	mustEmbedUnimplementedFalconServiceServer()
 }
 
@@ -68,6 +106,15 @@ type UnimplementedFalconServiceServer struct{}
 
 func (UnimplementedFalconServiceServer) RegisterEdge(context.Context, *RegisterRequest) (*RegisterResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RegisterEdge not implemented")
+}
+func (UnimplementedFalconServiceServer) Heartbeat(context.Context, *HeartbeatRequest) (*HeartbeatResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method Heartbeat not implemented")
+}
+func (UnimplementedFalconServiceServer) ReportStorage(context.Context, *StorageReport) (*StorageResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ReportStorage not implemented")
+}
+func (UnimplementedFalconServiceServer) UploadInventory(grpc.ClientStreamingServer[FileRecord, InventoryStatus]) error {
+	return status.Error(codes.Unimplemented, "method UploadInventory not implemented")
 }
 func (UnimplementedFalconServiceServer) mustEmbedUnimplementedFalconServiceServer() {}
 func (UnimplementedFalconServiceServer) testEmbeddedByValue()                       {}
@@ -108,6 +155,49 @@ func _FalconService_RegisterEdge_Handler(srv interface{}, ctx context.Context, d
 	return interceptor(ctx, in, info, handler)
 }
 
+func _FalconService_Heartbeat_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(HeartbeatRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(FalconServiceServer).Heartbeat(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: FalconService_Heartbeat_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(FalconServiceServer).Heartbeat(ctx, req.(*HeartbeatRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _FalconService_ReportStorage_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(StorageReport)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(FalconServiceServer).ReportStorage(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: FalconService_ReportStorage_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(FalconServiceServer).ReportStorage(ctx, req.(*StorageReport))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _FalconService_UploadInventory_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(FalconServiceServer).UploadInventory(&grpc.GenericServerStream[FileRecord, InventoryStatus]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type FalconService_UploadInventoryServer = grpc.ClientStreamingServer[FileRecord, InventoryStatus]
+
 // FalconService_ServiceDesc is the grpc.ServiceDesc for FalconService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -119,7 +209,116 @@ var FalconService_ServiceDesc = grpc.ServiceDesc{
 			MethodName: "RegisterEdge",
 			Handler:    _FalconService_RegisterEdge_Handler,
 		},
+		{
+			MethodName: "Heartbeat",
+			Handler:    _FalconService_Heartbeat_Handler,
+		},
+		{
+			MethodName: "ReportStorage",
+			Handler:    _FalconService_ReportStorage_Handler,
+		},
 	},
-	Streams:  []grpc.StreamDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "UploadInventory",
+			Handler:       _FalconService_UploadInventory_Handler,
+			ClientStreams: true,
+		},
+	},
+	Metadata: "proto/falcon.proto",
+}
+
+const (
+	TransferService_TransferFile_FullMethodName = "/falcon.TransferService/TransferFile"
+)
+
+// TransferServiceClient is the client API for TransferService service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+type TransferServiceClient interface {
+	TransferFile(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[FileChunk, TransferStatus], error)
+}
+
+type transferServiceClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewTransferServiceClient(cc grpc.ClientConnInterface) TransferServiceClient {
+	return &transferServiceClient{cc}
+}
+
+func (c *transferServiceClient) TransferFile(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[FileChunk, TransferStatus], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &TransferService_ServiceDesc.Streams[0], TransferService_TransferFile_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[FileChunk, TransferStatus]{ClientStream: stream}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type TransferService_TransferFileClient = grpc.ClientStreamingClient[FileChunk, TransferStatus]
+
+// TransferServiceServer is the server API for TransferService service.
+// All implementations must embed UnimplementedTransferServiceServer
+// for forward compatibility.
+type TransferServiceServer interface {
+	TransferFile(grpc.ClientStreamingServer[FileChunk, TransferStatus]) error
+	mustEmbedUnimplementedTransferServiceServer()
+}
+
+// UnimplementedTransferServiceServer must be embedded to have
+// forward compatible implementations.
+//
+// NOTE: this should be embedded by value instead of pointer to avoid a nil
+// pointer dereference when methods are called.
+type UnimplementedTransferServiceServer struct{}
+
+func (UnimplementedTransferServiceServer) TransferFile(grpc.ClientStreamingServer[FileChunk, TransferStatus]) error {
+	return status.Error(codes.Unimplemented, "method TransferFile not implemented")
+}
+func (UnimplementedTransferServiceServer) mustEmbedUnimplementedTransferServiceServer() {}
+func (UnimplementedTransferServiceServer) testEmbeddedByValue()                         {}
+
+// UnsafeTransferServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to TransferServiceServer will
+// result in compilation errors.
+type UnsafeTransferServiceServer interface {
+	mustEmbedUnimplementedTransferServiceServer()
+}
+
+func RegisterTransferServiceServer(s grpc.ServiceRegistrar, srv TransferServiceServer) {
+	// If the following call panics, it indicates UnimplementedTransferServiceServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
+	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
+		t.testEmbeddedByValue()
+	}
+	s.RegisterService(&TransferService_ServiceDesc, srv)
+}
+
+func _TransferService_TransferFile_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(TransferServiceServer).TransferFile(&grpc.GenericServerStream[FileChunk, TransferStatus]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type TransferService_TransferFileServer = grpc.ClientStreamingServer[FileChunk, TransferStatus]
+
+// TransferService_ServiceDesc is the grpc.ServiceDesc for TransferService service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var TransferService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "falcon.TransferService",
+	HandlerType: (*TransferServiceServer)(nil),
+	Methods:     []grpc.MethodDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "TransferFile",
+			Handler:       _TransferService_TransferFile_Handler,
+			ClientStreams: true,
+		},
+	},
 	Metadata: "proto/falcon.proto",
 }

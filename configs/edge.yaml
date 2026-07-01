@@ -11,3 +11,8 @@ core:
 
 logging:
   level: info
+
+storage:
+  data_dir: data
+  log_dir: logs
+  mount_path: /root/Falcon/dev-storage

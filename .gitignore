@@ -1,0 +1,7 @@
+build/
+*.exe
+*.out
+*.log
+.DS_Store
+tmp/
+bin/
