@@ -19,7 +19,7 @@ func New(db *sql.DB) *Migrator {
 
 func (m *Migrator) Run() error {
 
-	files, err := fs.Glob(MigrationFiles, "*.sql")
+	files, err := fs.Glob(MigrationFiles, "sql/*.sql")
 	if err != nil {
 		return err
 	}

@@ -1,0 +1,46 @@
+package repository
+
+import (
+	"database/sql"
+)
+
+type FileStateRepository struct {
+	db *sql.DB
+}
+
+func NewFileStateRepository(db *sql.DB) *FileStateRepository {
+	return &FileStateRepository{db: db}
+}
+
+func (r *FileStateRepository) Get(path string) (size int64, mod string, exists bool, err error) {
+
+	row := r.db.QueryRow(`
+		SELECT size, modified_at FROM file_state WHERE relative_path = ?
+	`, path)
+
+	err = row.Scan(&size, &mod)
+	if err == sql.ErrNoRows {
+		return 0, "", false, nil
+	}
+	if err != nil {
+		return 0, "", false, err
+	}
+
+	return size, mod, true, nil
+}
+
+func (r *FileStateRepository) Upsert(path string, size int64, mod string) error {
+
+	_, err := r.db.Exec(`
+		INSERT INTO file_state(relative_path, size, modified_at, last_seen)
+		VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+		ON CONFLICT(relative_path)
+		DO UPDATE SET
+			size = excluded.size,
+			modified_at = excluded.modified_at,
+			last_seen = CURRENT_TIMESTAMP
+	`, path, size, mod)
+
+	return err
+}
+

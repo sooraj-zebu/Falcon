@@ -5,7 +5,7 @@ CREATE TABLE IF NOT EXISTS schema_version (
 
 CREATE TABLE IF NOT EXISTS edges (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    edge_id TEXT UNIQUE,
+    edge_id TEXT UNIQUE NOT NULL,
     name TEXT NOT NULL,
     hostname TEXT,
     ip_address TEXT,

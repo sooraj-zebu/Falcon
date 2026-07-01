@@ -35,4 +35,5 @@ type LoggingConfig struct {
 type StorageConfig struct {
 	DataDir string `yaml:"data_dir"`
 	LogDir  string `yaml:"log_dir"`
+	MountPath string `yaml:"mount_path"`
 }

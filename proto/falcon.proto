@@ -4,19 +4,86 @@ package falcon;
 
 option go_package = "github.com/sooraj-zebu/falcon/proto;proto";
 
-// ---------- SERVICE ----------
 service FalconService {
-  rpc RegisterEdge (RegisterRequest) returns (RegisterResponse);
+    rpc RegisterEdge(RegisterRequest) returns (RegisterResponse);
+    rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);
+    rpc ReportStorage(StorageReport) returns (StorageResponse);
+    rpc UploadInventory(stream FileRecord) returns (InventoryStatus);
+    rpc TransferFile(stream FileChunk) returns (TransferStatus);
 }
 
-// ---------- EDGE REGISTRATION ----------
+//Registering edge
 message RegisterRequest {
-  string name = 1;
-  string version = 2;
-  string ip = 3;
+    string name = 1;
+    string version = 2;
+    string ip = 3;
 }
 
 message RegisterResponse {
-  string edge_id = 1;
-  string status = 2;
+    string edge_id = 1;
+    string status = 2;
+}
+
+//Edge Heartbeat
+message HeartbeatRequest {
+    string edge_id = 1;
+}
+
+message HeartbeatResponse {
+    string status = 1;
+}
+
+service TransferService {
+
+  rpc TransferFile(stream FileChunk) returns (TransferStatus);
+
+}
+
+//File chunk details
+message FileChunk {
+  string transfer_id = 1;
+  string file_id = 2;
+  int64 chunk_index = 3;
+  bytes data = 4;
+  string checksum = 5;
+}
+
+message TransferStatus {
+  string transfer_id = 1;
+  string status = 2;   // success | failed | running
+  int64 received_chunks = 3;
+}
+
+//Recording mount details to DB
+message StorageReport {
+    string edge_id = 1;
+
+    string mount_path = 2;
+
+    uint64 total_bytes = 3;
+    uint64 used_bytes = 4;
+    uint64 free_bytes = 5;
+
+    bool writable = 6;
+}
+
+message StorageResponse {
+    string status = 1;
+}
+
+//Recording file detail to DB
+message FileRecord {
+    string edge_id = 1;
+    string relative_path = 2;
+    string file_name = 3;
+    int64 size = 4;
+    string modified_at = 5;
+
+    string event_type = 6; // NEW: created | modified | deleted
+}
+
+message InventoryStatus {
+
+    bool success = 1;
+    int32 files_received = 2;
 }

@@ -1,0 +1,14 @@
+CREATE TABLE IF NOT EXISTS storage (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+    edge_id TEXT NOT NULL UNIQUE,
+
+    mount_path TEXT NOT NULL,
+    total_bytes INTEGER NOT NULL,
+    used_bytes INTEGER NOT NULL,
+    free_bytes INTEGER NOT NULL,
+
+    writable INTEGER NOT NULL,
+
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
