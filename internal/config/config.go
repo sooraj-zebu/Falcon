@@ -25,6 +25,7 @@ type EdgeConfig struct {
 
 type CoreConfig struct {
 	Host     string `yaml:"host"`
+	HTTPPort int    `yaml:"http_port"`
 	GRPCPort int    `yaml:"grpc_port"`
 }
 
@@ -33,7 +34,7 @@ type LoggingConfig struct {
 }
 
 type StorageConfig struct {
-	DataDir string `yaml:"data_dir"`
-	LogDir  string `yaml:"log_dir"`
+	DataDir   string `yaml:"data_dir"`
+	LogDir    string `yaml:"log_dir"`
 	MountPath string `yaml:"mount_path"`
 }

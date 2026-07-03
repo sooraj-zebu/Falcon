@@ -31,4 +31,27 @@ func RegisterEdgeRoutes(
 
 		json.NewEncoder(w).Encode(edges)
 	})
+
+	mux.HandleFunc("/api/v1/edge-health", func(
+		w nethttp.ResponseWriter,
+		r *nethttp.Request,
+	) {
+		if r.Method != nethttp.MethodGet {
+			w.WriteHeader(nethttp.StatusMethodNotAllowed)
+			return
+		}
+
+		health, err := edgeService.ListHealth()
+		if err != nil {
+			nethttp.Error(
+				w,
+				err.Error(),
+				nethttp.StatusInternalServerError,
+			)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(health)
+	})
 }

@@ -69,6 +69,21 @@ func (c *EdgeClient) Heartbeat(edgeID string) error {
 	return err
 }
 
+func (c *EdgeClient) ReportStorage(edgeID string, health storage.Health) error {
+	_, err := c.client.ReportStorage(
+		context.Background(),
+		&pb.StorageReport{
+			EdgeId:     edgeID,
+			MountPath:  health.MountPath,
+			TotalBytes: health.Total,
+			UsedBytes:  health.Used,
+			FreeBytes:  health.Free,
+			Writable:   health.Healthy && health.Writable,
+		},
+	)
+	return err
+}
+
 // UploadInventory
 func (c *EdgeClient) UploadInventory(
 	edgeID string,

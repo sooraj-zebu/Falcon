@@ -39,6 +39,48 @@ func RegisterTransferRoutes(
 		}
 	})
 
+	mux.HandleFunc("/api/v1/transfers/", func(w nethttp.ResponseWriter, r *nethttp.Request) {
+		if r.Method != nethttp.MethodPost {
+			w.WriteHeader(nethttp.StatusMethodNotAllowed)
+			return
+		}
+
+		path := r.URL.Path
+		prefix := "/api/v1/transfers/"
+		suffix := "/progress"
+		if len(path) <= len(prefix)+len(suffix) || path[len(path)-len(suffix):] != suffix {
+			nethttp.NotFound(w, r)
+			return
+		}
+
+		jobID := path[len(prefix) : len(path)-len(suffix)]
+		var req struct {
+			Status           string `json:"status"`
+			CurrentFile      string `json:"current_file"`
+			BytesTotal       int64  `json:"bytes_total"`
+			BytesTransferred int64  `json:"bytes_transferred"`
+			ErrorMessage     string `json:"error_message"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			nethttp.Error(w, err.Error(), nethttp.StatusBadRequest)
+			return
+		}
+
+		if err := transferService.UpdateJobStatus(
+			jobID,
+			req.Status,
+			req.CurrentFile,
+			req.BytesTotal,
+			req.BytesTransferred,
+			req.ErrorMessage,
+		); err != nil {
+			nethttp.Error(w, err.Error(), nethttp.StatusInternalServerError)
+			return
+		}
+
+		writeJSON(w, map[string]string{"status": "ok"})
+	})
+
 	mux.HandleFunc("/api/v1/transfer-workers", func(w nethttp.ResponseWriter, r *nethttp.Request) {
 		switch r.Method {
 		case nethttp.MethodGet:

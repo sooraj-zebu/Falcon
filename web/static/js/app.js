@@ -117,6 +117,29 @@ async function loadTransfers(){
     });
 }
 
+async function loadEdgeHealth(){
+    const items=(await getJSON("/api/v1/edge-health")) || [];
+    const tbody=document.querySelector("#edge-health tbody");
+    tbody.innerHTML="";
+
+    items.forEach(item=>{
+        const used=item.total_bytes>0
+            ? `${formatBytes(item.used_bytes)} / ${formatBytes(item.total_bytes)}`
+            : "unknown";
+
+        tbody.innerHTML+=`
+        <tr>
+        <td>${escapeHTML(item.name || item.edge_id)}<br><span>${escapeHTML(item.status)}</span></td>
+        <td>${escapeHTML(item.host)}<br><span>HTTP ${escapeHTML(item.http_port)} / gRPC ${escapeHTML(item.grpc_port)}</span></td>
+        <td class="${item.healthy ? "completed" : "failed"}">${item.healthy ? "healthy" : "unhealthy"}<br><span>${escapeHTML(item.mount_path)}</span></td>
+        <td>${used}<br><span>${item.writable ? "writable" : "not writable"}</span></td>
+        <td>${escapeHTML(item.health_message)}</td>
+        <td>${escapeHTML(item.updated_at)}</td>
+        </tr>
+        `;
+    });
+}
+
 async function loadWorkers(){
     const workers=(await getJSON("/api/v1/transfer-workers")) || [];
     const tbody=document.querySelector("#workers tbody");
@@ -135,7 +158,7 @@ async function loadWorkers(){
 }
 
 async function refreshAll(){
-    await Promise.all([loadEdges(),loadTransfers(),loadWorkers()]);
+    await Promise.all([loadEdges(),loadEdgeHealth(),loadTransfers(),loadWorkers()]);
 }
 
 document.querySelector("#transfer-form").addEventListener("submit",async event=>{

@@ -1,14 +1,11 @@
 package service
 
 import (
-	"context"
+	"bytes"
+	"encoding/json"
 	"fmt"
-	"io"
 	"log"
-	"os"
-	"path/filepath"
-	"sync"
-	"time"
+	nethttp "net/http"
 
 	"github.com/sooraj-zebu/falcon/internal/repository"
 )
@@ -16,12 +13,11 @@ import (
 const DefaultTransferChunkSize int64 = 64 * 1024 * 1024
 
 type TransferService struct {
-	repo   *repository.TransferRepository
-	logger *log.Logger
-
-	ctx    context.Context
-	cancel context.CancelFunc
-	wg     sync.WaitGroup
+	repo         *repository.TransferRepository
+	edgeService  *EdgeService
+	coreHost     string
+	coreHTTPPort int
+	logger       *log.Logger
 }
 
 type CreateTransferRequest struct {
@@ -32,13 +28,19 @@ type CreateTransferRequest struct {
 	ChunkSize         int64  `json:"chunk_size"`
 }
 
-func NewTransferService(repo *repository.TransferRepository, logger *log.Logger) *TransferService {
-	ctx, cancel := context.WithCancel(context.Background())
+func NewTransferService(
+	repo *repository.TransferRepository,
+	edgeService *EdgeService,
+	coreHost string,
+	coreHTTPPort int,
+	logger *log.Logger,
+) *TransferService {
 	return &TransferService{
-		repo:   repo,
-		logger: logger,
-		ctx:    ctx,
-		cancel: cancel,
+		repo:         repo,
+		edgeService:  edgeService,
+		coreHost:     coreHost,
+		coreHTTPPort: coreHTTPPort,
+		logger:       logger,
 	}
 }
 
@@ -72,6 +74,11 @@ func (s *TransferService) CreateJob(req CreateTransferRequest) (repository.Trans
 		return repository.TransferJob{}, err
 	}
 
+	if err := s.dispatchEdgeTransfer(job); err != nil {
+		_ = s.repo.MarkJobFailed(job.JobID, "", err)
+		return repository.TransferJob{}, err
+	}
+
 	return job, nil
 }
 
@@ -94,7 +101,6 @@ func (s *TransferService) CreateWorker(name string) (repository.TransferWorkerRe
 		return repository.TransferWorkerRecord{}, err
 	}
 
-	s.startWorker(worker.WorkerID)
 	return worker, nil
 }
 
@@ -103,198 +109,79 @@ func (s *TransferService) ListWorkers() ([]repository.TransferWorkerRecord, erro
 }
 
 func (s *TransferService) StartExistingWorkers() {
-	workers, err := s.repo.ListWorkers()
-	if err != nil {
-		s.logger.Println("transfer worker restore failed:", err)
-		return
-	}
-
-	for _, worker := range workers {
-		if worker.Status == "running" {
-			s.startWorker(worker.WorkerID)
-		}
-	}
 }
 
 func (s *TransferService) Stop() {
-	s.cancel()
-	s.wg.Wait()
 }
 
-func (s *TransferService) startWorker(workerID string) {
-	s.wg.Add(1)
-	go func() {
-		defer s.wg.Done()
-		ticker := time.NewTicker(2 * time.Second)
-		defer ticker.Stop()
-
-		for {
-			select {
-			case <-s.ctx.Done():
-				return
-			case <-ticker.C:
-				if err := s.repo.WorkerHeartbeat(workerID); err != nil {
-					s.logger.Println("transfer worker heartbeat failed:", err)
-				}
-
-				job, err := s.repo.ClaimNextJob(workerID)
-				if err != nil {
-					s.logger.Println("transfer job claim failed:", err)
-					continue
-				}
-				if job == nil {
-					continue
-				}
-
-				if err := s.copyPath(*job); err != nil {
-					s.logger.Println("transfer job failed:", job.JobID, err)
-					_ = s.repo.MarkJobFailed(job.JobID, workerID, err)
-					continue
-				}
-
-				_ = s.repo.MarkJobComplete(job.JobID, workerID)
-			}
-		}
-	}()
+func (s *TransferService) UpdateJobStatus(
+	jobID string,
+	status string,
+	currentFile string,
+	total int64,
+	transferred int64,
+	message string,
+) error {
+	return s.repo.SetStatus(jobID, status, currentFile, total, transferred, message)
 }
 
-func (s *TransferService) copyPath(job repository.TransferJob) error {
-	info, err := os.Stat(job.SourcePath)
+func (s *TransferService) dispatchEdgeTransfer(job repository.TransferJob) error {
+	source, err := s.edgeService.GetHealth(job.SourceEdgeID)
+	if err != nil {
+		return fmt.Errorf("source edge health missing: %w", err)
+	}
+	destination, err := s.edgeService.GetHealth(job.DestinationEdgeID)
+	if err != nil {
+		return fmt.Errorf("destination edge health missing: %w", err)
+	}
+
+	if source.Status != "online" {
+		return fmt.Errorf("source edge is not online")
+	}
+	if destination.Status != "online" {
+		return fmt.Errorf("destination edge is not online")
+	}
+	if !source.Healthy {
+		return fmt.Errorf("source mount is unhealthy: %s", source.HealthMessage)
+	}
+	if !destination.Healthy {
+		return fmt.Errorf("destination mount is unhealthy: %s", destination.HealthMessage)
+	}
+	if source.HTTPPort == 0 || destination.HTTPPort == 0 || destination.GRPCPort == 0 {
+		return fmt.Errorf("edge runtime ports are missing")
+	}
+
+	payload := map[string]any{
+		"job_id":                job.JobID,
+		"source_path":           job.SourcePath,
+		"destination_path":      job.DestinationPath,
+		"destination_host":      destination.Host,
+		"destination_http_port": destination.HTTPPort,
+		"destination_grpc_port": destination.GRPCPort,
+		"core_host":             s.coreHost,
+		"core_http_port":        s.coreHTTPPort,
+		"chunk_size":            job.ChunkSize,
+	}
+
+	body, err := json.Marshal(payload)
 	if err != nil {
 		return err
 	}
 
-	if !info.IsDir() {
-		transferred, err := s.copyFile(job, job.SourcePath, job.DestinationPath, 0, info.Size(), info.Size())
-		job.BytesTransferred = transferred
-		job.BytesTotal = info.Size()
+	if err := s.repo.MarkJobRunning(job.JobID); err != nil {
 		return err
 	}
 
-	total, err := directorySize(job.SourcePath)
+	url := fmt.Sprintf("http://%s:%d/api/v1/edge/transfers", source.Host, source.HTTPPort)
+	resp, err := nethttp.Post(url, "application/json", bytes.NewReader(body))
 	if err != nil {
 		return err
 	}
+	defer resp.Body.Close()
 
-	var transferred int64
-	err = filepath.WalkDir(job.SourcePath, func(path string, entry os.DirEntry, walkErr error) error {
-		if walkErr != nil {
-			return walkErr
-		}
-
-		rel, err := filepath.Rel(job.SourcePath, path)
-		if err != nil {
-			return err
-		}
-
-		dest := filepath.Join(job.DestinationPath, rel)
-		if entry.IsDir() {
-			return os.MkdirAll(dest, 0755)
-		}
-
-		info, err := entry.Info()
-		if err != nil {
-			return err
-		}
-
-		nextTransferred, err := s.copyFile(job, path, dest, transferred, total, info.Size())
-		transferred = nextTransferred
-		return err
-	})
-
-	job.BytesTransferred = transferred
-	job.BytesTotal = total
-	return err
-}
-
-func (s *TransferService) copyFile(job repository.TransferJob, sourcePath, destinationPath string, baseTransferred, totalBytes, fileSize int64) (int64, error) {
-	if err := os.MkdirAll(filepath.Dir(destinationPath), 0755); err != nil {
-		return baseTransferred, err
+	if resp.StatusCode >= 300 {
+		return fmt.Errorf("source edge rejected transfer: %s", resp.Status)
 	}
 
-	source, err := os.Open(sourcePath)
-	if err != nil {
-		return baseTransferred, err
-	}
-	defer source.Close()
-
-	destination, err := os.OpenFile(destinationPath, os.O_CREATE|os.O_RDWR, 0644)
-	if err != nil {
-		return baseTransferred, err
-	}
-	defer destination.Close()
-
-	offset := int64(0)
-	if info, err := destination.Stat(); err == nil {
-		offset = info.Size()
-	}
-	if offset > fileSize {
-		if err := destination.Truncate(0); err != nil {
-			return baseTransferred, err
-		}
-		offset = 0
-	}
-
-	if _, err := source.Seek(offset, io.SeekStart); err != nil {
-		return baseTransferred, err
-	}
-	if _, err := destination.Seek(offset, io.SeekStart); err != nil {
-		return baseTransferred, err
-	}
-
-	buffer := make([]byte, job.ChunkSize)
-	transferred := baseTransferred + offset
-	if err := s.repo.UpdateProgress(job.JobID, sourcePath, totalBytes, transferred); err != nil {
-		return transferred, err
-	}
-
-	for {
-		select {
-		case <-s.ctx.Done():
-			return transferred, s.ctx.Err()
-		default:
-		}
-
-		n, readErr := source.Read(buffer)
-		if n > 0 {
-			if _, err := destination.Write(buffer[:n]); err != nil {
-				return transferred, err
-			}
-
-			transferred += int64(n)
-			if err := s.repo.UpdateProgress(job.JobID, sourcePath, totalBytes, transferred); err != nil {
-				return transferred, err
-			}
-		}
-
-		if readErr == io.EOF {
-			break
-		}
-		if readErr != nil {
-			return transferred, readErr
-		}
-	}
-
-	return transferred, destination.Sync()
-}
-
-func directorySize(root string) (int64, error) {
-	var total int64
-	err := filepath.WalkDir(root, func(path string, entry os.DirEntry, walkErr error) error {
-		if walkErr != nil {
-			return walkErr
-		}
-		if entry.IsDir() {
-			return nil
-		}
-
-		info, err := entry.Info()
-		if err != nil {
-			return err
-		}
-
-		total += info.Size()
-		return nil
-	})
-	return total, err
+	return nil
 }

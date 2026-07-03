@@ -2,6 +2,7 @@ package bootstrap
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/sooraj-zebu/falcon/internal/app"
 	"github.com/sooraj-zebu/falcon/internal/config"
@@ -27,6 +28,9 @@ func NewCore(configFile string) (*app.CoreApp, error) {
 
 	// DB path
 	dbPath := fmt.Sprintf("%s/falcon.db", cfg.Storage.DataDir)
+	if err := os.MkdirAll(cfg.Storage.DataDir, 0755); err != nil {
+		return nil, err
+	}
 
 	// Open DB
 	db, err := database.New(dbPath)
@@ -42,11 +46,22 @@ func NewCore(configFile string) (*app.CoreApp, error) {
 
 	// Repository + Service
 	edgeRepo := repository.NewEdgeRepository(db)
-	edgeService := service.NewEdgeService(edgeRepo)
+	edgeHealthRepo := repository.NewEdgeHealthRepository(db)
+	edgeService := service.NewEdgeService(edgeRepo, edgeHealthRepo)
 	fileRepo := repository.NewFileRepository(db)
 	fileService := service.NewFileService(fileRepo)
 	transferRepo := repository.NewTransferRepository(db)
-	transferService := service.NewTransferService(transferRepo, log)
+	coreHTTPHost := cfg.Core.Host
+	if coreHTTPHost == "" {
+		coreHTTPHost = "127.0.0.1"
+	}
+	transferService := service.NewTransferService(
+		transferRepo,
+		edgeService,
+		coreHTTPHost,
+		cfg.Server.HTTPPort,
+		log,
+	)
 	transferService.StartExistingWorkers()
 	//syncRepo := repository.NewSyncQueueRepository(db)
 	//storageRepo := repository.NewStorageRepository(db)

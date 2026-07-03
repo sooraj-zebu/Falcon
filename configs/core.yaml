@@ -6,6 +6,9 @@ server:
   http_port: 12166
   grpc_port: 12167
 
+core:
+  host: 127.0.0.1
+
 logging:
   level: info
 

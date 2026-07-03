@@ -1,15 +1,19 @@
 package app
 
 import (
+	"encoding/json"
 	"log"
+	"net"
 	"time"
 
 	"github.com/sooraj-zebu/falcon/internal/client"
 	"github.com/sooraj-zebu/falcon/internal/config"
+	grpcserver "github.com/sooraj-zebu/falcon/internal/grpc"
+	httpserver "github.com/sooraj-zebu/falcon/internal/http"
+	"github.com/sooraj-zebu/falcon/internal/repository"
 	"github.com/sooraj-zebu/falcon/internal/service"
 	"github.com/sooraj-zebu/falcon/internal/storage"
 	"github.com/sooraj-zebu/falcon/internal/watcher"
-	"github.com/sooraj-zebu/falcon/internal/repository"
 )
 
 type EdgeApp struct {
@@ -25,6 +29,7 @@ type EdgeApp struct {
 func (a *EdgeApp) Start() {
 
 	a.Logger.Println("Starting Edge:", a.Config.Edge.Name)
+	normalizeEdgePorts(a.Config)
 
 	// -------------------------
 	// STORAGE INIT (HEALTH ONLY)
@@ -37,10 +42,14 @@ func (a *EdgeApp) Start() {
 	info, err := manager.CheckHealth()
 	if err != nil {
 		a.Logger.Println("Storage check failed:", err)
-		return
+		info = &storage.Health{
+			MountPath: a.Config.Storage.MountPath,
+			Healthy:   false,
+			Message:   err.Error(),
+		}
+	} else {
+		a.Logger.Println("Storage OK:", info.MountPath)
 	}
-
-	a.Logger.Println("Storage OK:", info.MountPath)
 
 	// -------------------------
 	// CONNECT TO CORE
@@ -56,13 +65,41 @@ func (a *EdgeApp) Start() {
 
 	a.Client = c
 
+	go func() {
+		err := grpcserver.StartEdgeTransferServer(
+			a.Config.Server.GRPCPort,
+			a.Config.Storage.MountPath,
+			a.Logger,
+		)
+		if err != nil {
+			a.Logger.Println("edge transfer gRPC server error:", err)
+		}
+	}()
+
+	go func() {
+		err := httpserver.StartEdgeControlServer(
+			a.Config.Server.HTTPPort,
+			a.Config.Storage.MountPath,
+			a.Logger,
+		)
+		if err != nil {
+			a.Logger.Println("edge control HTTP server error:", err)
+		}
+	}()
+
 	// -------------------------
 	// REGISTER EDGE
 	// -------------------------
+	runtime, _ := json.Marshal(map[string]any{
+		"host":      outboundIP(),
+		"http_port": a.Config.Server.HTTPPort,
+		"grpc_port": a.Config.Server.GRPCPort,
+	})
+
 	edgeID, err := a.Client.Register(
 		a.Config.Edge.Name,
 		a.Config.App.Version,
-		"127.0.0.1",
+		string(runtime),
 	)
 	if err != nil {
 		a.Logger.Println("Register failed:", err)
@@ -71,10 +108,17 @@ func (a *EdgeApp) Start() {
 
 	a.EdgeID = edgeID
 	a.Logger.Println("Edge registered:", edgeID)
+	_ = a.Client.ReportStorage(a.EdgeID, *info)
 
 	// -------------------------
 	// WATCHER INIT (NO FULL SCAN ANYMORE)
 	// -------------------------
+	if !info.Healthy {
+		a.Logger.Println("Watcher disabled because storage is unhealthy:", info.Message)
+		go a.startHeartbeat()
+		return
+	}
+
 	w, err := watcher.New(a.Config.Storage.MountPath, a.Logger)
 	if err != nil {
 		a.Logger.Println("Watcher init failed:", err)
@@ -128,6 +172,51 @@ func (a *EdgeApp) startHeartbeat() {
 			continue
 		}
 
+		manager := storage.NewManager(
+			a.Config.Storage.MountPath,
+			a.Logger,
+		)
+
+		info, healthErr := manager.CheckHealth()
+		if healthErr != nil {
+			info = &storage.Health{
+				MountPath: a.Config.Storage.MountPath,
+				Healthy:   false,
+				Message:   healthErr.Error(),
+			}
+		}
+
+		if err := a.Client.ReportStorage(a.EdgeID, *info); err != nil {
+			a.Logger.Println("Storage report failed:", err)
+		}
+
 		a.Logger.Println("Heartbeat sent")
 	}
+}
+
+func normalizeEdgePorts(cfg *config.Config) {
+	if cfg.Server.HTTPPort == 0 {
+		cfg.Server.HTTPPort = 12168
+	}
+	if cfg.Server.GRPCPort == 0 {
+		cfg.Server.GRPCPort = 12169
+	}
+	if cfg.Core.HTTPPort == 0 {
+		cfg.Core.HTTPPort = 12166
+	}
+}
+
+func outboundIP() string {
+	conn, err := net.Dial("udp", "8.8.8.8:80")
+	if err != nil {
+		return "127.0.0.1"
+	}
+	defer conn.Close()
+
+	localAddr, ok := conn.LocalAddr().(*net.UDPAddr)
+	if !ok {
+		return "127.0.0.1"
+	}
+
+	return localAddr.IP.String()
 }

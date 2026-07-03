@@ -6,8 +6,10 @@ import (
 	"io"
 	"log"
 	"net"
-	"time"
 	"os"
+	"path/filepath"
+	"strings"
+	"time"
 
 	"github.com/sooraj-zebu/falcon/internal/service"
 	"github.com/sooraj-zebu/falcon/internal/storage"
@@ -25,6 +27,7 @@ type Server struct {
 
 type TransferServer struct {
 	pb.UnimplementedTransferServiceServer
+	mountPath string
 }
 
 // NewServer
@@ -74,6 +77,17 @@ func (s *Server) ReportStorage(
 ) (*pb.StorageResponse, error) {
 
 	log.Println("[gRPC] storage report:", req.EdgeId)
+	if err := s.edgeService.ReportStorage(
+		req.EdgeId,
+		req.MountPath,
+		req.TotalBytes,
+		req.UsedBytes,
+		req.FreeBytes,
+		req.Writable,
+	); err != nil {
+		return nil, err
+	}
+
 	return &pb.StorageResponse{Status: "ok"}, nil
 }
 
@@ -159,6 +173,27 @@ func StartServer(
 	return grpcServer.Serve(lis)
 }
 
+func StartEdgeTransferServer(
+	port int,
+	mountPath string,
+	logger *log.Logger,
+) error {
+	lis, err := net.Listen("tcp", ":"+fmt.Sprint(port))
+	if err != nil {
+		return err
+	}
+
+	grpcServer := grpc.NewServer()
+	pb.RegisterTransferServiceServer(
+		grpcServer,
+		&TransferServer{mountPath: mountPath},
+	)
+
+	logger.Println("[Edge gRPC] transfer server running on", port)
+
+	return grpcServer.Serve(lis)
+}
+
 // TransferFile
 func (s *TransferServer) TransferFile(
 	stream pb.TransferService_TransferFileServer,
@@ -168,7 +203,7 @@ func (s *TransferServer) TransferFile(
 
 	var (
 		file     *os.File
-		filePath = "/tmp/falcon-transfer.tmp"
+		filePath string
 	)
 
 	for {
@@ -194,8 +229,21 @@ func (s *TransferServer) TransferFile(
 		}
 
 		if file == nil {
-			file, err = os.Create(filePath)
+			filePath, err = s.resolveDestinationPath(chunk.FileId)
 			if err != nil {
+				return err
+			}
+
+			if err := os.MkdirAll(filepath.Dir(filePath), 0755); err != nil {
+				return err
+			}
+
+			file, err = os.OpenFile(filePath, os.O_CREATE|os.O_RDWR, 0644)
+			if err != nil {
+				return err
+			}
+
+			if _, err := file.Seek(chunk.ChunkIndex, io.SeekStart); err != nil {
 				return err
 			}
 		}
@@ -207,4 +255,25 @@ func (s *TransferServer) TransferFile(
 			return err
 		}
 	}
+}
+
+func (s *TransferServer) resolveDestinationPath(path string) (string, error) {
+	if path == "" {
+		return "", fmt.Errorf("missing destination path")
+	}
+
+	cleanPath := filepath.Clean(path)
+	if s.mountPath == "" {
+		return cleanPath, nil
+	}
+
+	mountPath := filepath.Clean(s.mountPath)
+	if filepath.IsAbs(cleanPath) {
+		if cleanPath == mountPath || strings.HasPrefix(cleanPath, mountPath+string(os.PathSeparator)) {
+			return cleanPath, nil
+		}
+		return "", fmt.Errorf("destination path must be inside mount path %s", mountPath)
+	}
+
+	return filepath.Join(mountPath, cleanPath), nil
 }

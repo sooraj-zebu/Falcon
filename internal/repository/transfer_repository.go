@@ -219,6 +219,58 @@ func (r *TransferRepository) UpdateProgress(jobID, currentFile string, total, tr
 	return err
 }
 
+func (r *TransferRepository) MarkJobRunning(jobID string) error {
+	_, err := r.db.DB.Exec(`
+		UPDATE transfer_jobs
+		SET
+			status = 'running',
+			attempts = attempts + 1,
+			started_at = COALESCE(started_at, datetime('now')),
+			error_message = NULL,
+			updated_at = datetime('now')
+		WHERE job_id = ?
+	`, jobID)
+	return err
+}
+
+func (r *TransferRepository) SetStatus(
+	jobID string,
+	status string,
+	currentFile string,
+	total int64,
+	transferred int64,
+	message string,
+) error {
+	completedSQL := "NULL"
+	if status == "completed" {
+		completedSQL = "datetime('now')"
+	}
+
+	_, err := r.db.DB.Exec(fmt.Sprintf(`
+		UPDATE transfer_jobs
+		SET
+			status = ?,
+			current_file = COALESCE(NULLIF(?, ''), current_file),
+			bytes_total = CASE WHEN ? > 0 THEN ? ELSE bytes_total END,
+			bytes_transferred = CASE WHEN ? > 0 OR ? = 'completed' THEN ? ELSE bytes_transferred END,
+			error_message = ?,
+			updated_at = datetime('now'),
+			completed_at = %s
+		WHERE job_id = ?
+	`, completedSQL),
+		status,
+		currentFile,
+		total,
+		total,
+		transferred,
+		status,
+		transferred,
+		message,
+		jobID,
+	)
+	return err
+}
+
 func (r *TransferRepository) MarkJobComplete(jobID, workerID string) error {
 	_, err := r.db.DB.Exec(`
 		UPDATE transfer_jobs

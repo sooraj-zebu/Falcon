@@ -1,11 +1,14 @@
 package bootstrap
 
 import (
+	"os"
+
 	"github.com/sooraj-zebu/falcon/internal/app"
 	"github.com/sooraj-zebu/falcon/internal/client"
 	"github.com/sooraj-zebu/falcon/internal/config"
-	"github.com/sooraj-zebu/falcon/internal/logger"
 	"github.com/sooraj-zebu/falcon/internal/database"
+	"github.com/sooraj-zebu/falcon/internal/logger"
+	"github.com/sooraj-zebu/falcon/internal/migration"
 	"github.com/sooraj-zebu/falcon/internal/repository"
 )
 
@@ -18,9 +21,18 @@ func NewEdge(configFile string) (*app.EdgeApp, error) {
 
 	logg := logger.New()
 
+	if err := os.MkdirAll(cfg.Storage.DataDir, 0755); err != nil {
+		return nil, err
+	}
+
 	// DB for sync system
 	db, err := database.New(cfg.Storage.DataDir + "/edge.db")
 	if err != nil {
+		return nil, err
+	}
+
+	migrator := migration.New(db.DB)
+	if err := migrator.Run(); err != nil {
 		return nil, err
 	}
 
