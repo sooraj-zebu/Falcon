@@ -17,6 +17,88 @@
 
 <h1>Falcon Dashboard</h1>
 
+<section class="panel">
+<div class="section-header">
+<h2>Create Transfer</h2>
+<button id="refresh">Refresh</button>
+</div>
+
+<form id="transfer-form" class="grid-form">
+<label>
+Source Edge
+<select id="source-edge" required></select>
+</label>
+
+<label>
+Destination Edge
+<select id="destination-edge" required></select>
+</label>
+
+<label>
+Source Path
+<input id="source-path" placeholder="/mnt/smb/source-folder-or-file" required>
+</label>
+
+<label>
+Destination Path
+<input id="destination-path" placeholder="/mnt/smb/destination-folder-or-file" required>
+</label>
+
+<label>
+Chunk Size
+<select id="chunk-size">
+<option value="67108864">64 MB</option>
+<option value="134217728">128 MB</option>
+<option value="268435456">256 MB</option>
+</select>
+</label>
+
+<button type="submit">Start Transfer</button>
+</form>
+</section>
+
+<section class="panel">
+<div class="section-header">
+<h2>Workers</h2>
+<form id="worker-form" class="inline-form">
+<input id="worker-name" placeholder="Worker name">
+<button type="submit">Create Worker</button>
+</form>
+</div>
+
+<table id="workers">
+<thead>
+<tr>
+<th>Name</th>
+<th>Status</th>
+<th>Current Job</th>
+<th>Last Seen</th>
+</tr>
+</thead>
+<tbody></tbody>
+</table>
+</section>
+
+<section class="panel">
+<h2>Transfers</h2>
+
+<table id="transfers">
+<thead>
+<tr>
+<th>Job</th>
+<th>Status</th>
+<th>Source</th>
+<th>Destination</th>
+<th>Progress</th>
+<th>Worker</th>
+<th>Error</th>
+</tr>
+</thead>
+<tbody></tbody>
+</table>
+</section>
+
+<section class="panel">
 <h2>Connected Edges</h2>
 
 <table id="edges">
@@ -38,6 +120,7 @@
 </tbody>
 
 </table>
+</section>
 
 </div>
 

@@ -3,11 +3,11 @@ package bootstrap
 import (
 	"fmt"
 
-        httpserver "github.com/sooraj-zebu/falcon/internal/http"
 	"github.com/sooraj-zebu/falcon/internal/app"
 	"github.com/sooraj-zebu/falcon/internal/config"
 	"github.com/sooraj-zebu/falcon/internal/database"
 	"github.com/sooraj-zebu/falcon/internal/grpc"
+	httpserver "github.com/sooraj-zebu/falcon/internal/http"
 	"github.com/sooraj-zebu/falcon/internal/logger"
 	"github.com/sooraj-zebu/falcon/internal/migration"
 	"github.com/sooraj-zebu/falcon/internal/repository"
@@ -45,6 +45,9 @@ func NewCore(configFile string) (*app.CoreApp, error) {
 	edgeService := service.NewEdgeService(edgeRepo)
 	fileRepo := repository.NewFileRepository(db)
 	fileService := service.NewFileService(fileRepo)
+	transferRepo := repository.NewTransferRepository(db)
+	transferService := service.NewTransferService(transferRepo, log)
+	transferService.StartExistingWorkers()
 	//syncRepo := repository.NewSyncQueueRepository(db)
 	//storageRepo := repository.NewStorageRepository(db)
 	//storageService := service.NewStorageService(storageRepo)
@@ -61,16 +64,15 @@ func NewCore(configFile string) (*app.CoreApp, error) {
 			log.Println("gRPC server error:", err)
 		}
 	}()
-	
+
 	go func() {
-	err := httpserver.StartServer(cfg.Server.HTTPPort, edgeService, log)
-	if err != nil {
-		log.Println("HTTP server error:", err)
-	}
+		err := httpserver.StartServer(cfg.Server.HTTPPort, edgeService, transferService, log)
+		if err != nil {
+			log.Println("HTTP server error:", err)
+		}
 	}()
-	
+
 	go service.StartMonitor(edgeService, log)
-	
+
 	return core, nil
 }
-

@@ -9,12 +9,18 @@ import (
 	"github.com/sooraj-zebu/falcon/internal/service"
 )
 
-func StartServer(port int, edgeService *service.EdgeService, logger *log.Logger) error {
+func StartServer(
+	port int,
+	edgeService *service.EdgeService,
+	transferService *service.TransferService,
+	logger *log.Logger,
+) error {
 
 	mux := nethttp.NewServeMux()
 
 	// API routes
 	RegisterEdgeRoutes(mux, edgeService)
+	RegisterTransferRoutes(mux, transferService)
 
 	// Static files
 	mux.Handle(
