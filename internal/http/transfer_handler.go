@@ -110,6 +110,29 @@ func RegisterTransferRoutes(
 			w.WriteHeader(nethttp.StatusMethodNotAllowed)
 		}
 	})
+
+	mux.HandleFunc("/api/v1/transfer-workers/", func(w nethttp.ResponseWriter, r *nethttp.Request) {
+		if r.Method != nethttp.MethodDelete {
+			w.WriteHeader(nethttp.StatusMethodNotAllowed)
+			return
+		}
+
+		path := r.URL.Path
+		prefix := "/api/v1/transfer-workers/"
+		workerId := path[len(prefix):]
+
+		if workerId == "" {
+			nethttp.NotFound(w, r)
+			return
+		}
+
+		if err := transferService.DeleteWorker(workerId); err != nil {
+			nethttp.Error(w, err.Error(), nethttp.StatusInternalServerError)
+			return
+		}
+
+		writeJSON(w, map[string]string{"status": "deleted"})
+	})
 }
 
 func writeJSON(w nethttp.ResponseWriter, value any) {

@@ -374,6 +374,14 @@ func (r *TransferRepository) clearWorkerJob(workerID string) error {
 	return err
 }
 
+func (r *TransferRepository) DeleteWorker(workerID string) error {
+	_, err := r.db.DB.Exec(`
+		DELETE FROM transfer_workers
+		WHERE worker_id = ?
+	`, workerID)
+	return err
+}
+
 func NewTransferID() string {
 	return fmt.Sprintf("transfer-%d", time.Now().UnixNano())
 }

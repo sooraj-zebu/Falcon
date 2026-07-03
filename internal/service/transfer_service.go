@@ -108,6 +108,10 @@ func (s *TransferService) ListWorkers() ([]repository.TransferWorkerRecord, erro
 	return s.repo.ListWorkers()
 }
 
+func (s *TransferService) DeleteWorker(workerID string) error {
+	return s.repo.DeleteWorker(workerID)
+}
+
 func (s *TransferService) StartExistingWorkers() {
 }
 

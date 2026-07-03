@@ -152,9 +152,32 @@ async function loadWorkers(){
         <td class="${escapeHTML(worker.status)}">${escapeHTML(worker.status)}</td>
         <td>${escapeHTML(worker.current_job_id)}</td>
         <td>${escapeHTML(worker.last_seen)}</td>
+        <td><button onclick="deleteWorker('${escapeHTML(worker.id)}')">Delete</button></td>
         </tr>
         `;
     });
+}
+
+async function deleteWorker(workerId){
+    if(!confirm("Are you sure you want to delete this worker?")){
+        return;
+    }
+    
+    try{
+        const response=await fetch(`/api/v1/transfer-workers/${workerId}`,{
+            method:"DELETE"
+        });
+        
+        if(!response.ok){
+            alert("Failed to delete worker");
+            return;
+        }
+        
+        await refreshAll();
+    }catch(err){
+        console.error("Error deleting worker:",err);
+        alert("Error deleting worker");
+    }
 }
 
 async function refreshAll(){
