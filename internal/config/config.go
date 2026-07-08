@@ -20,7 +20,8 @@ type ServerConfig struct {
 }
 
 type EdgeConfig struct {
-	Name string `yaml:"name"`
+	Name           string `yaml:"name"`
+	DisableAutoSync bool   `yaml:"disable_auto_sync"`
 }
 
 type CoreConfig struct {

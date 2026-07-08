@@ -2,6 +2,7 @@ package http
 
 import (
 	"encoding/json"
+	"errors"
 	nethttp "net/http"
 
 	"github.com/sooraj-zebu/falcon/internal/service"
@@ -127,6 +128,10 @@ func RegisterTransferRoutes(
 		}
 
 		if err := transferService.DeleteWorker(workerId); err != nil {
+			if errors.Is(err, service.ErrWorkerNotFound) {
+				nethttp.Error(w, err.Error(), nethttp.StatusNotFound)
+				return
+			}
 			nethttp.Error(w, err.Error(), nethttp.StatusInternalServerError)
 			return
 		}

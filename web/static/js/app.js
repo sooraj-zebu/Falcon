@@ -146,13 +146,14 @@ async function loadWorkers(){
     tbody.innerHTML="";
 
     workers.forEach(worker=>{
+        const workerId = worker.worker_id || worker.id;
         tbody.innerHTML+=`
         <tr>
         <td>${escapeHTML(worker.name)}</td>
         <td class="${escapeHTML(worker.status)}">${escapeHTML(worker.status)}</td>
         <td>${escapeHTML(worker.current_job_id)}</td>
         <td>${escapeHTML(worker.last_seen)}</td>
-        <td><button onclick="deleteWorker('${escapeHTML(worker.id)}')">Delete</button></td>
+        <td><button type="button" class="delete-worker" data-worker-id="${escapeHTML(workerId)}">Delete</button></td>
         </tr>
         `;
     });
@@ -164,12 +165,14 @@ async function deleteWorker(workerId){
     }
     
     try{
-        const response=await fetch(`/api/v1/transfer-workers/${workerId}`,{
+        console.log("Deleting worker", workerId);
+        const response=await fetch(`/api/v1/transfer-workers/${encodeURIComponent(workerId)}`,{
             method:"DELETE"
         });
         
         if(!response.ok){
-            alert("Failed to delete worker");
+            const body = await response.text();
+            alert(`Failed to delete worker: ${body}`);
             return;
         }
         
@@ -208,6 +211,19 @@ document.querySelector("#worker-form").addEventListener("submit",async event=>{
 
     event.target.reset();
     await refreshAll();
+});
+
+document.querySelector("#workers").addEventListener("click", async event => {
+    const button = event.target.closest(".delete-worker");
+    if (!button) {
+        return;
+    }
+    const workerId = button.dataset.workerId;
+    if (!workerId) {
+        alert("Worker ID is missing");
+        return;
+    }
+    await deleteWorker(workerId);
 });
 
 document.querySelector("#refresh").addEventListener("click",refreshAll);

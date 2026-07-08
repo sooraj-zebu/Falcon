@@ -110,6 +110,12 @@ func (a *EdgeApp) Start() {
 	a.Logger.Println("Edge registered:", edgeID)
 	_ = a.Client.ReportStorage(a.EdgeID, *info)
 
+	if a.Config.Edge.DisableAutoSync {
+		a.Logger.Println("Automatic sync disabled; starting heartbeat only")
+		go a.startHeartbeat()
+		return
+	}
+
 	// -------------------------
 	// WATCHER INIT (NO FULL SCAN ANYMORE)
 	// -------------------------
@@ -156,42 +162,54 @@ func (a *EdgeApp) Stop() {
 }
 
 func (a *EdgeApp) startHeartbeat() {
+	if a.Client == nil {
+		return
+	}
+
+	if err := a.sendHeartbeat(); err != nil {
+		a.Logger.Println("Initial heartbeat failed:", err)
+	}
 
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
 
 	for range ticker.C {
-
-		if a.Client == nil {
-			continue
-		}
-
-		err := a.Client.Heartbeat(a.EdgeID)
-		if err != nil {
+		if err := a.sendHeartbeat(); err != nil {
 			a.Logger.Println("Heartbeat failed:", err)
-			continue
 		}
-
-		manager := storage.NewManager(
-			a.Config.Storage.MountPath,
-			a.Logger,
-		)
-
-		info, healthErr := manager.CheckHealth()
-		if healthErr != nil {
-			info = &storage.Health{
-				MountPath: a.Config.Storage.MountPath,
-				Healthy:   false,
-				Message:   healthErr.Error(),
-			}
-		}
-
-		if err := a.Client.ReportStorage(a.EdgeID, *info); err != nil {
-			a.Logger.Println("Storage report failed:", err)
-		}
-
-		a.Logger.Println("Heartbeat sent")
 	}
+}
+
+func (a *EdgeApp) sendHeartbeat() error {
+	if a.Client == nil {
+		return nil
+	}
+
+	err := a.Client.Heartbeat(a.EdgeID)
+	if err != nil {
+		return err
+	}
+
+	manager := storage.NewManager(
+		a.Config.Storage.MountPath,
+		a.Logger,
+	)
+
+	info, healthErr := manager.CheckHealth()
+	if healthErr != nil {
+		info = &storage.Health{
+			MountPath: a.Config.Storage.MountPath,
+			Healthy:   false,
+			Message:   healthErr.Error(),
+		}
+	}
+
+	if err := a.Client.ReportStorage(a.EdgeID, *info); err != nil {
+		return err
+	}
+
+	a.Logger.Println("Heartbeat sent")
+	return nil
 }
 
 func normalizeEdgePorts(cfg *config.Config) {

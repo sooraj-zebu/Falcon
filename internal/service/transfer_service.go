@@ -3,6 +3,7 @@ package service
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	nethttp "net/http"
@@ -108,8 +109,17 @@ func (s *TransferService) ListWorkers() ([]repository.TransferWorkerRecord, erro
 	return s.repo.ListWorkers()
 }
 
+var ErrWorkerNotFound = errors.New("worker not found")
+
 func (s *TransferService) DeleteWorker(workerID string) error {
-	return s.repo.DeleteWorker(workerID)
+	rows, err := s.repo.DeleteWorker(workerID)
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrWorkerNotFound
+	}
+	return nil
 }
 
 func (s *TransferService) StartExistingWorkers() {
