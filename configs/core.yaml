@@ -13,5 +13,5 @@ logging:
   level: info
 
 storage:
-  data_dir: /var/lib/falcon
-  log_dir: /var/log/falcon
+  data_dir: /Users/sooraj/Desktop/Falcon/Falcon/db
+  log_dir: /Users/sooraj/Desktop/Falcon/Falcon/db/
