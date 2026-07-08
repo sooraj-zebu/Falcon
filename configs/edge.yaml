@@ -4,6 +4,7 @@ app:
 
 edge:
   name: falcon-edge-
+  host: 
   disable_auto_sync: true
 
 core:
