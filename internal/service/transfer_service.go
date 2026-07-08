@@ -75,8 +75,14 @@ func (s *TransferService) CreateJob(req CreateTransferRequest) (repository.Trans
 		return repository.TransferJob{}, err
 	}
 
+	assignedWorkerID, err := s.repo.AssignJobToAvailableWorker(job.JobID)
+	if err != nil {
+		return repository.TransferJob{}, err
+	}
+	job.WorkerID = assignedWorkerID
+
 	if err := s.dispatchEdgeTransfer(job); err != nil {
-		_ = s.repo.MarkJobFailed(job.JobID, "", err)
+		_ = s.repo.MarkJobFailed(job.JobID, assignedWorkerID, err)
 		return repository.TransferJob{}, err
 	}
 

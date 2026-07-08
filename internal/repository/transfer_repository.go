@@ -70,6 +70,52 @@ func (r *TransferRepository) CreateJob(job TransferJob) error {
 	return err
 }
 
+func (r *TransferRepository) AssignJobToAvailableWorker(jobID string) (string, error) {
+	tx, err := r.db.DB.Begin()
+	if err != nil {
+		return "", err
+	}
+	defer tx.Rollback()
+
+	var workerID string
+	err = tx.QueryRow(`
+		SELECT worker_id
+		FROM transfer_workers
+		WHERE status = 'running'
+		AND COALESCE(current_job_id, '') = ''
+		ORDER BY created_at, id
+		LIMIT 1
+	`).Scan(&workerID)
+	if err == sql.ErrNoRows {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+
+	if _, err := tx.Exec(`
+		UPDATE transfer_jobs
+		SET worker_id = ?
+		WHERE job_id = ?
+	`, workerID, jobID); err != nil {
+		return "", err
+	}
+
+	if _, err := tx.Exec(`
+		UPDATE transfer_workers
+		SET current_job_id = ?
+		WHERE worker_id = ?
+	`, jobID, workerID); err != nil {
+		return "", err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return "", err
+	}
+
+	return workerID, nil
+}
+
 func (r *TransferRepository) ListJobs(limit int) ([]TransferJob, error) {
 	if limit <= 0 {
 		limit = 100
