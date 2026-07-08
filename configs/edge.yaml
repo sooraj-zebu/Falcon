@@ -3,21 +3,17 @@ app:
   version: 1.0.0
 
 edge:
-  name: falcon-edge-tvm
-
-server:
-  http_port: 12168
-  grpc_port: 12169
+  name: falcon-edge-
+  disable_auto_sync: true
 
 core:
-  host: 127.0.0.1
-  http_port: 12166
+  host: 43.241.70.134
   grpc_port: 12167
 
 logging:
   level: info
 
 storage:
-  data_dir: data
-  log_dir: logs
-  mount_path: /root/Falcon/dev-storage
+  data_dir: /opt/falcon/data
+  log_dir: /opt/falcon/logs
+  mount_path: /mnt/storage
