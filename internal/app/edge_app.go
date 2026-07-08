@@ -90,8 +90,12 @@ func (a *EdgeApp) Start() {
 	// -------------------------
 	// REGISTER EDGE
 	// -------------------------
+	host := a.Config.Edge.Host
+	if host == "" {
+		host = outboundIP()
+	}
 	runtime, _ := json.Marshal(map[string]any{
-		"host":      outboundIP(),
+		"host":      host,
 		"http_port": a.Config.Server.HTTPPort,
 		"grpc_port": a.Config.Server.GRPCPort,
 	})
