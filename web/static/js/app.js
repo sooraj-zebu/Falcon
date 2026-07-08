@@ -146,7 +146,6 @@ async function loadWorkers(){
     tbody.innerHTML="";
 
     workers.forEach(worker=>{
-        const workerId = worker.worker_id || worker.id;
         const workerId = escapeHTML(worker.worker_id || worker.id);
         tbody.innerHTML+=`
         <tr>
@@ -154,8 +153,7 @@ async function loadWorkers(){
         <td class="${escapeHTML(worker.status)}">${escapeHTML(worker.status)}</td>
         <td>${escapeHTML(worker.current_job_id)}</td>
         <td>${escapeHTML(worker.last_seen)}</td>
-        <td><button type="button" class="delete-worker" data-worker-id="${escapeHTML(workerId)}">Delete</button></td>
-        <td><button onclick="deleteWorker('${workerId}')">Delete</button></td>
+        <td><button type="button" class="delete-worker" data-worker-id="${workerId}">Delete</button></td>
         </tr>
         `;
     });
