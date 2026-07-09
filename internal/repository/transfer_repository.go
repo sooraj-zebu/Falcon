@@ -262,7 +262,17 @@ func (r *TransferRepository) UpdateProgress(jobID, currentFile string, total, tr
 			updated_at = datetime('now')
 		WHERE job_id = ?
 	`, currentFile, total, transferred, jobID)
-	return err
+	if err != nil {
+		return err
+	}
+
+	// persist an event for audit
+	_, _ = r.db.DB.Exec(`
+		INSERT INTO transfer_events (job_id, status, current_file, bytes_total, bytes_transferred, error_message)
+		VALUES (?, 'running', ?, ?, ?, NULL)
+	`, jobID, currentFile, total, transferred)
+
+	return nil
 }
 
 func (r *TransferRepository) MarkJobRunning(jobID string) error {
@@ -292,7 +302,7 @@ func (r *TransferRepository) SetStatus(
 		completedSQL = "datetime('now')"
 	}
 
-	_, err := r.db.DB.Exec(fmt.Sprintf(`
+	res, err := r.db.DB.Exec(fmt.Sprintf(`
 		UPDATE transfer_jobs
 		SET
 			status = ?,
@@ -314,7 +324,22 @@ func (r *TransferRepository) SetStatus(
 		message,
 		jobID,
 	)
-	return err
+	if err != nil {
+		return err
+	}
+
+	// Log event (best-effort)
+	if _, err2 := r.db.DB.Exec(`
+		INSERT INTO transfer_events (job_id, status, current_file, bytes_total, bytes_transferred, error_message)
+		VALUES (?, ?, COALESCE(NULLIF(?, ''), ''), ?, ?, ?)
+	`, jobID, status, currentFile, total, transferred, message); err2 != nil {
+		// if event logging fails, return original update error only if res indicates no rows changed
+		// but since update succeeded, ignore event logging error to not block important status updates
+	}
+
+	// If status is completed or failed and needs to clear worker, nothing else here - caller handles clear
+	_ = res
+	return nil
 }
 
 func (r *TransferRepository) MarkJobComplete(jobID, workerID string) error {
@@ -331,6 +356,12 @@ func (r *TransferRepository) MarkJobComplete(jobID, workerID string) error {
 	if err != nil {
 		return err
 	}
+
+	// persist completion event
+	_, _ = r.db.DB.Exec(`
+		INSERT INTO transfer_events (job_id, status, current_file, bytes_total, bytes_transferred, error_message)
+		VALUES (?, 'completed', NULL, NULL, NULL, NULL)
+	`, jobID)
 
 	return r.clearWorkerJob(workerID)
 }
@@ -352,6 +383,12 @@ func (r *TransferRepository) MarkJobFailed(jobID, workerID string, cause error) 
 	if err != nil {
 		return err
 	}
+
+	// persist failure event
+	_, _ = r.db.DB.Exec(`
+		INSERT INTO transfer_events (job_id, status, current_file, bytes_total, bytes_transferred, error_message)
+		VALUES (?, 'failed', NULL, NULL, NULL, ?)
+	`, jobID, message)
 
 	return r.clearWorkerJob(workerID)
 }

@@ -48,12 +48,24 @@ function renderEdgeOptions(){
     const source=document.querySelector("#source-edge");
     const destination=document.querySelector("#destination-edge");
 
-    const options=cachedEdges.map(edge=>`
+    // preserve current selections so periodic refresh doesn't reset user's choice
+    const prevSource = source ? source.value : null;
+    const prevDest = destination ? destination.value : null;
+
+    const options = cachedEdges.map(edge => `
         <option value="${escapeHTML(edge.edge_id)}">${escapeHTML(edge.name)} (${escapeHTML(edge.status)})</option>
     `).join("");
 
-    source.innerHTML=options;
-    destination.innerHTML=options;
+    if (source) source.innerHTML = options;
+    if (destination) destination.innerHTML = options;
+
+    if (prevSource && source) {
+        // restore if still present
+        try { source.value = prevSource; } catch (e) {}
+    }
+    if (prevDest && destination) {
+        try { destination.value = prevDest; } catch (e) {}
+    }
 }
 
 async function loadEdges(){
